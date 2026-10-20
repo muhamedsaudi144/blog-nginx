@@ -1,0 +1,52 @@
+env: []
+secrets: []
+command: []
+args: []
+
+healthCheckPath: "/healthy"
+
+image:
+  repository: 810358531268.dkr.ecr.eu-west-1.amazonaws.com/nginx
+  tag: "" # set to commit ID by the pipeline
+  pullPolicy: IfNotPresent
+
+containerPort: 8080
+service:
+  type: ClusterIP
+  port: 80
+
+serviceAccount:
+  create: true
+  annotations: {}
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+resources:
+  {}
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 1000m      # Single core
+  #   memory: 1024Mi
+replicaCount: 1
+rollingUpdatePercentage:
+    maxSurge: 25%            # default: 25%
+    maxUnavailable: 25%      # default: 25%
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  ## scaling on memory usage is Not needed for assetmanager. enabling it causes troubles while scaling down. Ref: https://stackoverflow.com/questions/64138144/kubernetes-hpa-doesnt-scale-down-after-decreasing-the-loads/64185360#64185360
+  #targetMemoryUtilizationPercentage: 80
+
+tolerations: []
+nodeSelector: {}
+podAnnotations: {}
+podSecurityContext: {}
+securityContext: {}
+affinity: {}
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""

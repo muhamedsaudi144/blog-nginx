@@ -1,0 +1,11 @@
+{
+    "applinks": {
+        "apps": [],
+        "details": [
+            {
+                "appID": "3RRQWHXB25.co.sarwa.ios",
+                "paths": ["/password/reset/*", "/trade-account-statement/*"]
+            }
+        ]
+    }
+}

@@ -1,0 +1,15 @@
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
+metadata:
+  name: {{ include "nginx.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "nginx.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+spec:
+  serviceRef:
+    name: {{ include "nginx.fullname" . }}
+    port: {{ .Values.service.port }}
+  targetGroupARN: {{ .Values.service.targetGroupARN }}
+  targetType: ip

@@ -1,0 +1,40 @@
+image:
+  repository: 810358531268.dkr.ecr.eu-west-1.amazonaws.com/nginx
+
+## AutoScaling Settings
+replicaCount: 2
+rollingUpdatePercentage:
+  maxSurge: 50% # default: 25%
+  maxUnavailable: 0 # default: 25%
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 90
+  #targetMemoryUtilizationPercentage: 80
+
+## assetmanager request & limits configs
+resources:
+  requests:
+    cpu: 300m
+    memory: 300Mi
+
+## Tolerations Setting if any
+tolerations:
+  - key: "app-workloads"
+    value: "istrue"
+    effect: "NoSchedule"
+
+## Environment Variables & Secrets
+env:
+  - name: SARWA_HOST
+    value: "www.sarwa.co"
+
+secrets: []
+
+serviceAccount:
+  annotations:
+    "eks.amazonaws.com/role-arn": "arn:aws:iam::896600869729:role/eks-prod-ireland-0/nginx_euwest_irsa"
+
+service:
+  targetGroupARN: "arn:aws:elasticloadbalancing:eu-west-1:896600869729:targetgroup/prod-nginx-blog/3b5adb2bf5cface7"

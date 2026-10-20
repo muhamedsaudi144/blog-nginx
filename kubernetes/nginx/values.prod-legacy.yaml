@@ -1,0 +1,38 @@
+## AutoScaling Settings
+replicaCount: 2
+rollingUpdatePercentage:
+  maxSurge: 50% # default: 25%
+  maxUnavailable: 0 # default: 25%
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 90
+  ## scaling on memory usage is Not needed for assetmanager. enabling it causes troubles while scaling down. Ref: https://stackoverflow.com/questions/64138144/kubernetes-hpa-doesnt-scale-down-after-decreasing-the-loads/64185360#64185360
+  #targetMemoryUtilizationPercentage: 80
+
+## assetmanager request & limits configs
+resources:
+  requests:
+    cpu: 300m
+    memory: 600Mi
+
+## Tolerations Setting if any
+tolerations:
+  - key: "app-workloads"
+    value: "istrue"
+    effect: "NoSchedule"
+
+## Environment Variables & Secrets
+env:
+  - name: SARWA_HOST
+    value: "www.sarwa.co"
+
+secrets: []
+
+serviceAccount:
+  annotations:
+    "eks.amazonaws.com/role-arn": "arn:aws:iam::896600869729:role/eks-prod-0/nginx"
+
+service:
+  targetGroupARN: "arn:aws:elasticloadbalancing:eu-west-1:896600869729:targetgroup/prod-nginx-blog/bdd0fbe2544cd31a"

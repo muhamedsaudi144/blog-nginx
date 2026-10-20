@@ -1,0 +1,118 @@
+image: atlassian/default-image:4
+
+
+clone:
+  depth: full # SonarCloud scanner needs the full history to assign issues properly
+
+definitions:
+  steps:
+
+    - step: &build
+        name: Build
+        oidc: true
+        image: hadolint/hadolint:v2.12.0-debian
+        script:
+          - hadolint *Dockerfile*
+          - docker build . --file Dockerfile --tag ${BITBUCKET_REPO_SLUG}
+        services:
+          - docker
+        caches:
+          - docker  
+
+    - step: &build-and-push
+        name: Build & Push to ECR
+        oidc: true
+        image: hadolint/hadolint:v2.12.0-debian
+        script:
+          - hadolint *Dockerfile*
+          - docker build . --file Dockerfile --tag ${BITBUCKET_REPO_SLUG}
+          - docker tag ${BITBUCKET_REPO_SLUG} ${BITBUCKET_REPO_SLUG}:${BITBUCKET_COMMIT}
+          - pipe: atlassian/aws-ecr-push-image:2.6.0
+            variables:
+              IMAGE_NAME: $BITBUCKET_REPO_SLUG
+              TAGS: '${BITBUCKET_COMMIT} ${BITBUCKET_TAG}'
+              AWS_OIDC_ROLE_ARN: $AWS_OIDC_ROLE_ARN_tools
+              AWS_DEFAULT_REGION: $AWS_DEFAULT_REGION
+        services:
+          - docker
+        caches:
+          - docker
+
+    - step: &eks-deploy-stage
+        name: Deploy (k8s-stage)
+        image: alpine/k8s:1.34.4
+        oidc: true
+        script:
+          # OIDC Authentication
+          - export AWS_REGION=$AWS_DEFAULT_REGION
+          - export AWS_ROLE_ARN=$AWS_OIDC_ROLE_ARN_stage
+          - export AWS_WEB_IDENTITY_TOKEN_FILE=$(pwd)/web-identity-token
+          - echo $BITBUCKET_STEP_OIDC_TOKEN > $(pwd)/web-identity-token
+          # Parameters.
+          - export CLUSTER_NAME=stage-ireland-0
+          - export SERVICE=nginx
+          - export CHART=kubernetes/${SERVICE}
+          - export VALUES=kubernetes/${SERVICE}/values.stage.yaml
+          # Add EKS cluster to kubeconfig.
+          - aws eks update-kubeconfig --region ${AWS_REGION} --name ${CLUSTER_NAME}
+          # Deploy via Helm (install or upgrade).
+          - helm upgrade --install ${SERVICE} ${CHART} -n ${SERVICE} --create-namespace --set image.tag=${BITBUCKET_COMMIT} -f ${VALUES} --wait --atomic
+
+
+    - step: &eks-deploy-prod
+        name: Deploy (k8s-prod)
+        image: alpine/k8s:1.34.4
+        oidc: true
+        trigger: manual
+        script:
+          # OIDC Authentication
+          - export AWS_REGION=${AWS_DEFAULT_REGION}
+          - export AWS_ROLE_ARN=$AWS_OIDC_ROLE_ARN_prod
+          - export AWS_WEB_IDENTITY_TOKEN_FILE=$(pwd)/web-identity-token
+          - echo $BITBUCKET_STEP_OIDC_TOKEN > $(pwd)/web-identity-token
+          # Parameters.
+          - export CLUSTER_NAME=prod-ireland-0
+          - export SERVICE=nginx
+          - export CHART=kubernetes/${SERVICE}
+          - export VALUES=kubernetes/${SERVICE}/values.prod-eu.yaml
+          # Add EKS cluster to kubeconfig.
+          - aws eks update-kubeconfig --region ${AWS_REGION} --name ${CLUSTER_NAME}
+          # Deploy via Helm (install or upgrade).
+          - helm upgrade --install ${SERVICE} ${CHART} -n ${SERVICE} --create-namespace --set image.tag=${BITBUCKET_COMMIT} -f ${VALUES} --wait --atomic
+
+    - step: &eks-diff-prod
+        name: Diff (k8s-prod)
+        image: alpine/k8s:1.34.4
+        oidc: true
+        script:
+          # OIDC Authentication
+          - export AWS_REGION=${AWS_DEFAULT_REGION}
+          - export AWS_ROLE_ARN=$AWS_OIDC_ROLE_ARN_prod
+          - export AWS_WEB_IDENTITY_TOKEN_FILE=$(pwd)/web-identity-token
+          - echo $BITBUCKET_STEP_OIDC_TOKEN > $(pwd)/web-identity-token
+          # Parameters.
+          - export CLUSTER_NAME=prod-ireland-0
+          - export SERVICE=nginx
+          - export CHART=kubernetes/${SERVICE}
+          - export VALUES=kubernetes/${SERVICE}/values.prod-eu.yaml
+          # Add EKS cluster to kubeconfig.
+          - aws eks update-kubeconfig --region ${AWS_REGION} --name ${CLUSTER_NAME}
+          # Install helm-diff plugin (idempotent) then show diff.
+          - helm plugin list | grep -qE '^[[:space:]]*diff[[:space:]]' && helm plugin update diff || helm plugin install --verify=false https://github.com/databus23/helm-diff
+          # Exit code 2 means "diff found" (we want to allow that).
+          - helm diff upgrade ${SERVICE} ${CHART} -n ${SERVICE} --allow-unreleased --set image.tag=${BITBUCKET_COMMIT} -f ${VALUES} --detailed-exitcode || test $? -eq 2
+
+
+pipelines:
+  pull-requests:
+    "**":
+      - parallel:
+          - step: *build
+          - step: *eks-diff-prod
+      
+  branches:
+    master:
+      - step: *build-and-push
+      # - step: *eks-deploy-stage      
+      - step: *eks-diff-prod
+      - step: *eks-deploy-prod
