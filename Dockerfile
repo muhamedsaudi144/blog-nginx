@@ -34,6 +34,12 @@ RUN NGINX_ARGS=$(nginx -V 2>&1 | sed -n -e 's/^.*arguments: //p') && \
 
 FROM nginx:${NGINX_VERSION}
 
+# libbrotli1 upgraded to the Debian 13 security build (1.1.0-2+deb13u1) to fix CVE-2026-111497
+# hadolint ignore=DL3008
+RUN apt-get update && \
+  apt-get install -y --no-install-recommends libbrotli1=* && \
+  rm -rf /var/lib/apt/lists/*
+
 COPY --chown=nginx:nginx nginx/nginx.conf /etc/nginx/nginx.conf
 COPY --chown=nginx:nginx nginx/nginx.static-blog.conf /etc/nginx/templates/default.conf.template
 #COPY nginx/nginx.default.conf /etc/nginx/templates/default.conf.template
